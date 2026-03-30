@@ -75,6 +75,12 @@
       color: var(--muted);
     }
 
+    .hint {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.2;
+    }
+
     .grid-fields {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -315,6 +321,51 @@
     .status-burning { color: #b45309; font-weight: 600; }
     .status-destroyed { color: #b91c1c; font-weight: 600; }
 
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .tab-btn {
+      background: #eef2f7;
+      color: #1f2937;
+      border: 1px solid #d5dce5;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .tab-btn.active {
+      background: #1f6feb;
+      color: #fff;
+      border-color: #1f6feb;
+    }
+
+    .trace-scroll {
+      max-height: 260px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .trace-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 10px 0 6px;
+      color: #1f2937;
+    }
+
+    .trace-pager {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 12px;
+    }
+
     .error {
       color: #991b1b;
       font-size: 12px;
@@ -381,8 +432,9 @@
         <label>Cell Burn Duration
           <input id="cellBurnDurationInput" type="number" min="0.01" step="0.1" value="2" />
         </label>
-        <label>Max Time
-          <input id="maxTimeInput" type="number" min="0.1" step="0.1" value="12" />
+        <label>Max simulation time (t_max)
+          <input id="tMaxInput" type="number" min="1" step="1" value="10" />
+          <span class="hint">Fire travel budget in time steps</span>
         </label>
         <label>dt
           <input id="dtInput" type="number" min="0.01" step="0.1" value="1" />
@@ -469,6 +521,110 @@
           <tbody id="lossTableBody"></tbody>
         </table>
       </section>
+
+      <section class="controls">
+        <div class="tab-bar">
+          <button id="optimizerResultsTabBtn" class="tab-btn active" type="button">Results</button>
+          <button id="optimizerTraceTabBtn" class="tab-btn" type="button">B&amp;B Step-Through</button>
+        </div>
+
+        <div id="optimizerResultsPanel">
+          <div class="small">Latest optimizer assignment summary</div>
+          <table style="margin-top:6px;">
+            <thead>
+              <tr>
+                <th>obj_id</th>
+                <th class="right">row</th>
+                <th class="right">col</th>
+                <th class="right">reachable</th>
+                <th class="right">expected_contribution</th>
+              </tr>
+            </thead>
+            <tbody id="optimizerResultsBody">
+              <tr><td colspan="5">Run optimizer to populate results.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="optimizerTracePanel" hidden>
+          <div id="tracePlaceholder" class="small">Run optimizer to view branch-and-bound trace.</div>
+
+          <div id="traceContent" hidden>
+            <div class="trace-section-title">Precomputation Table</div>
+            <div class="trace-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>obj_id</th>
+                    <th class="right">value</th>
+                    <th class="right">burn_time</th>
+                    <th class="right">deadline</th>
+                    <th class="right">coeff</th>
+                    <th class="right">sort_position</th>
+                  </tr>
+                </thead>
+                <tbody id="precomputeBody"></tbody>
+              </table>
+            </div>
+
+            <div class="trace-section-title">DFS Call Log</div>
+            <div class="trace-pager">
+              <button id="tracePrevBtn" class="ghost" type="button">&lt; Prev</button>
+              <button id="traceNextBtn" class="ghost" type="button">Next &gt;</button>
+              <span id="tracePageInfo">Page 1/1</span>
+            </div>
+            <div class="trace-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th class="right">depth</th>
+                    <th>obj_id</th>
+                    <th>cell</th>
+                    <th class="right">reachable</th>
+                    <th class="right">contribution</th>
+                    <th class="right">current_loss</th>
+                    <th class="right">lower_bound</th>
+                    <th class="right">best_loss</th>
+                    <th>action</th>
+                  </tr>
+                </thead>
+                <tbody id="dfsLogBody"></tbody>
+              </table>
+            </div>
+
+            <div class="trace-section-title">Best-Found History</div>
+            <div class="trace-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th class="right">loss</th>
+                    <th>assignment</th>
+                  </tr>
+                </thead>
+                <tbody id="bestHistoryBody"></tbody>
+              </table>
+            </div>
+
+            <div class="trace-section-title">Final Assignment Summary</div>
+            <div class="trace-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>obj_id</th>
+                    <th class="right">row</th>
+                    <th class="right">col</th>
+                    <th class="right">reachable</th>
+                    <th class="right">expected_contribution</th>
+                  </tr>
+                </thead>
+                <tbody id="finalSummaryBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -480,7 +636,7 @@
         n: 10,
         m: 10,
         cell_burn_duration: 2,
-        max_time: 12,
+        t_max: 10,
         dt: 1,
         objects: [],
         objectCounter: 1,
@@ -492,13 +648,18 @@
         isPlaying: false,
         playTimer: null,
         bestLoss: null,
+        optimizerResult: null,
+        optimizerTrace: null,
+        optimizerTab: "results",
+        tracePage: 0,
+        tracePageSize: 200,
       };
 
       const el = {
         nInput: document.getElementById("nInput"),
         mInput: document.getElementById("mInput"),
         cellBurnDurationInput: document.getElementById("cellBurnDurationInput"),
-        maxTimeInput: document.getElementById("maxTimeInput"),
+        tMaxInput: document.getElementById("tMaxInput"),
         dtInput: document.getElementById("dtInput"),
         objValueInput: document.getElementById("objValueInput"),
         objBurnTimeInput: document.getElementById("objBurnTimeInput"),
@@ -524,6 +685,20 @@
         timeDisplay: document.getElementById("timeDisplay"),
         lossDisplay: document.getElementById("lossDisplay"),
         lossTableBody: document.getElementById("lossTableBody"),
+        optimizerResultsTabBtn: document.getElementById("optimizerResultsTabBtn"),
+        optimizerTraceTabBtn: document.getElementById("optimizerTraceTabBtn"),
+        optimizerResultsPanel: document.getElementById("optimizerResultsPanel"),
+        optimizerTracePanel: document.getElementById("optimizerTracePanel"),
+        optimizerResultsBody: document.getElementById("optimizerResultsBody"),
+        tracePlaceholder: document.getElementById("tracePlaceholder"),
+        traceContent: document.getElementById("traceContent"),
+        precomputeBody: document.getElementById("precomputeBody"),
+        dfsLogBody: document.getElementById("dfsLogBody"),
+        bestHistoryBody: document.getElementById("bestHistoryBody"),
+        finalSummaryBody: document.getElementById("finalSummaryBody"),
+        tracePrevBtn: document.getElementById("tracePrevBtn"),
+        traceNextBtn: document.getElementById("traceNextBtn"),
+        tracePageInfo: document.getElementById("tracePageInfo"),
         modeInputs: [...document.querySelectorAll('input[name="mode"]')],
       };
 
@@ -545,13 +720,13 @@
         state.n = parsePositiveInt(el.nInput.value, state.n);
         state.m = parsePositiveInt(el.mInput.value, state.m);
         state.cell_burn_duration = parsePositiveFloat(el.cellBurnDurationInput.value, state.cell_burn_duration);
-        state.max_time = parsePositiveFloat(el.maxTimeInput.value, state.max_time);
+        state.t_max = parsePositiveInt(el.tMaxInput.value, state.t_max);
         state.dt = parsePositiveFloat(el.dtInput.value, state.dt);
 
         el.nInput.value = state.n;
         el.mInput.value = state.m;
         el.cellBurnDurationInput.value = state.cell_burn_duration;
-        el.maxTimeInput.value = state.max_time;
+        el.tMaxInput.value = state.t_max;
         el.dtInput.value = state.dt;
       }
 
@@ -568,6 +743,134 @@
         if (el.solveLoading) {
           el.solveLoading.hidden = !isLoading;
         }
+      }
+
+      function fmt(value, digits = 4) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "-";
+        return n.toFixed(digits);
+      }
+
+      function assignmentToText(rows) {
+        if (!rows || !rows.length) return "-";
+        return rows
+          .map((r) => `${r.obj_id}->(${r.row},${r.col})`)
+          .join(", ");
+      }
+
+      function setOptimizerTab(tabName) {
+        state.optimizerTab = tabName;
+        const resultsActive = tabName === "results";
+        el.optimizerResultsTabBtn.classList.toggle("active", resultsActive);
+        el.optimizerTraceTabBtn.classList.toggle("active", !resultsActive);
+        el.optimizerResultsPanel.hidden = !resultsActive;
+        el.optimizerTracePanel.hidden = resultsActive;
+      }
+
+      function renderOptimizerResults() {
+        if (!state.optimizerResult || !Array.isArray(state.optimizerResult.assignment) || !state.optimizerResult.assignment.length) {
+          el.optimizerResultsBody.innerHTML = '<tr><td colspan="5">Run optimizer to populate results.</td></tr>';
+          return;
+        }
+
+        const summary = state.optimizerTrace?.final_assignment_summary || [];
+        const summaryById = new Map(summary.map((row) => [String(row.obj_id), row]));
+        const rows = state.optimizerResult.assignment.map((row) => {
+          const info = summaryById.get(String(row.obj_id));
+          const reachable = info ? info.reachable_sources : "-";
+          return `
+            <tr>
+              <td>${row.obj_id}</td>
+              <td class="right">${row.row}</td>
+              <td class="right">${row.col}</td>
+              <td class="right">${reachable}</td>
+              <td class="right">${fmt(row.expected_contribution, 5)}</td>
+            </tr>
+          `;
+        }).join("");
+        el.optimizerResultsBody.innerHTML = rows;
+      }
+
+      function renderTracePanel() {
+        const trace = state.optimizerTrace;
+        if (!trace) {
+          el.tracePlaceholder.hidden = false;
+          el.traceContent.hidden = true;
+          return;
+        }
+
+        el.tracePlaceholder.hidden = true;
+        el.traceContent.hidden = false;
+
+        const preRows = (trace.precomputation || []).map((row) => `
+          <tr>
+            <td>${row.obj_id}</td>
+            <td class="right">${fmt(row.value, 2)}</td>
+            <td class="right">${fmt(row.burn_time, 2)}</td>
+            <td class="right">${fmt(row.deadline, 2)}</td>
+            <td class="right">${fmt(row.coeff, 5)}</td>
+            <td class="right">${row.sort_position}</td>
+          </tr>
+        `).join("");
+        el.precomputeBody.innerHTML = preRows || '<tr><td colspan="6">No data</td></tr>';
+
+        const log = trace.dfs_call_log || [];
+        const totalPages = Math.max(1, Math.ceil(log.length / state.tracePageSize));
+        if (state.tracePage >= totalPages) state.tracePage = totalPages - 1;
+        if (state.tracePage < 0) state.tracePage = 0;
+        const start = state.tracePage * state.tracePageSize;
+        const end = start + state.tracePageSize;
+        const pageRows = log.slice(start, end).map((row) => `
+          <tr>
+            <td>${row.call_no}</td>
+            <td class="right">${row.depth}</td>
+            <td>${row.obj_id}</td>
+            <td>(${row.row}, ${row.col})</td>
+            <td class="right">${row.reachable_sources}</td>
+            <td class="right">${fmt(row.contribution, 5)}</td>
+            <td class="right">${fmt(row.current_loss, 5)}</td>
+            <td class="right">${fmt(row.lower_bound, 5)}</td>
+            <td class="right">${row.best_loss_at_call === null ? "-" : fmt(row.best_loss_at_call, 5)}</td>
+            <td>${row.action}</td>
+          </tr>
+        `).join("");
+        el.dfsLogBody.innerHTML = pageRows || '<tr><td colspan="10">No DFS rows</td></tr>';
+        el.tracePageInfo.textContent = `Page ${state.tracePage + 1}/${totalPages} (${log.length} rows)`;
+        el.tracePrevBtn.disabled = state.tracePage <= 0;
+        el.traceNextBtn.disabled = state.tracePage >= totalPages - 1;
+
+        const bestRows = (trace.best_found_history || []).map((row) => `
+          <tr>
+            <td>${row.call_no}</td>
+            <td class="right">${fmt(row.loss, 5)}</td>
+            <td>${assignmentToText(row.assignment)}</td>
+          </tr>
+        `).join("");
+        el.bestHistoryBody.innerHTML = bestRows || '<tr><td colspan="3">No incumbent updates captured.</td></tr>';
+
+        const finalRows = (trace.final_assignment_summary || []).map((row) => `
+          <tr>
+            <td>${row.obj_id}</td>
+            <td class="right">${row.row}</td>
+            <td class="right">${row.col}</td>
+            <td class="right">${row.reachable_sources}</td>
+            <td class="right">${fmt(row.expected_contribution, 5)}</td>
+          </tr>
+        `).join("");
+        el.finalSummaryBody.innerHTML = finalRows || '<tr><td colspan="5">No final summary</td></tr>';
+      }
+
+      function renderOptimizerPanels() {
+        renderOptimizerResults();
+        renderTracePanel();
+        setOptimizerTab(state.optimizerTab);
+      }
+
+      function clearOptimizerState() {
+        state.optimizerResult = null;
+        state.optimizerTrace = null;
+        state.tracePage = 0;
+        renderOptimizerPanels();
       }
 
       function objectAtCell(r, c) {
@@ -627,6 +930,7 @@
           state.source = null;
         }
 
+        clearOptimizerState();
         clearSimulation();
         setupGrid();
         renderObjectList();
@@ -652,6 +956,7 @@
           remove.style.padding = "5px 7px";
           remove.addEventListener("click", () => {
             state.objects = state.objects.filter((o) => o.obj_id !== obj.obj_id);
+            clearOptimizerState();
             clearSimulation();
             renderObjectList();
             renderGrid();
@@ -826,6 +1131,7 @@
 
         if (state.mode === "source") {
           state.source = { r, c };
+          clearOptimizerState();
           clearSimulation();
           renderGrid();
           return;
@@ -836,6 +1142,7 @@
           if (existing) {
             existing.row = null;
             existing.col = null;
+            clearOptimizerState();
             clearSimulation();
             renderObjectList();
             renderGrid();
@@ -850,6 +1157,7 @@
 
           next.row = r;
           next.col = c;
+          clearOptimizerState();
           clearSimulation();
           renderObjectList();
           renderGrid();
@@ -1198,6 +1506,9 @@
         const n = Number(config.n);
         const m = Number(config.m);
         if (!(n > 0 && m > 0)) throw new Error("n and m must be positive");
+        const tMax = Number.parseInt(config.t_max ?? 10, 10);
+        const collectTrace = Boolean(config.collect_trace);
+        if (!(tMax > 0)) throw new Error("t_max must be a positive integer");
 
         const parsed = (config.objects || []).map((obj, idx) => ({
           obj_id: String(obj.obj_id ?? `obj_${idx + 1}`),
@@ -1205,56 +1516,104 @@
           burn_time: Math.max(0, Number(obj.burn_time ?? 1)),
           flammability: Math.max(0, Number(obj.flammability ?? 1)),
         }));
-
         if (parsed.length > n * m) throw new Error("More objects than cells: cannot place all objects");
 
-        const allCells = [];
-        for (let r = 0; r < n; r += 1) {
-          for (let c = 0; c < m; c += 1) {
-            allCells.push([r, c]);
+        function reachableCount(row, col, d) {
+          if (d < 0) return 0;
+          let count = 0;
+          for (let dr = -d; dr <= d; dr += 1) {
+            const r = row + dr;
+            if (r < 0 || r >= n) continue;
+            const dcMax = d - Math.abs(dr);
+            const cLo = Math.max(0, col - dcMax);
+            const cHi = Math.min(m - 1, col + dcMax);
+            count += cHi - cLo + 1;
           }
+          return count;
         }
 
-        const cells = allCells.map(([r, c]) => {
-          let total = 0;
-          for (const [rr, cc] of allCells) {
-            total += Math.abs(r - rr) + Math.abs(c - cc);
-          }
-          return [r, c, total / allCells.length];
-        });
-        const minD = Math.min(...cells.map((x) => x[2]));
-        const maxD = Math.max(...cells.map((x) => x[2]));
-        for (const cell of cells) {
-          const avgD = cell[2];
-          const centrality = Math.abs(maxD - minD) < 1e-12 ? 0.5 : (1 - (avgD - minD) / (maxD - minD));
-          cell[2] = 0.2 + 0.8 * centrality;
+        function expectedLossCoeff(row, col, obj) {
+          const deadline = tMax - obj.burn_time;
+          if (deadline < 0) return 0;
+          const reachable = reachableCount(row, col, Math.floor(deadline));
+          return obj.value * reachable / (n * m);
         }
 
-        const risks = cells.map((x) => x[2]);
-        const coeffByObj = new Map();
+        const numCells = n * m;
+        const rawLosses = [];
+        const maxPossible = [];
         for (const obj of parsed) {
-          coeffByObj.set(obj.obj_id, obj.value * obj.flammability / (1 + obj.burn_time));
+          const rowLosses = [];
+          for (let cellIdx = 0; cellIdx < numCells; cellIdx += 1) {
+            const row = Math.floor(cellIdx / m);
+            const col = cellIdx % m;
+            rowLosses.push(expectedLossCoeff(row, col, obj));
+          }
+          rawLosses.push(rowLosses);
+          maxPossible.push(Math.max(...rowLosses));
         }
 
-        const sortedObjects = [...parsed].sort((a, b) => (coeffByObj.get(b.obj_id) - coeffByObj.get(a.obj_id)));
-        const cellIndices = Array.from({ length: cells.length }, (_, i) => i);
+        const sortedObjOrder = Array.from({ length: parsed.length }, (_, i) => i)
+          .sort((a, b) => maxPossible[b] - maxPossible[a]);
+        const sortedObjects = sortedObjOrder.map((i) => parsed[i]);
+        const lossTable = sortedObjOrder.map((i) => rawLosses[i]);
+        const numObjects = sortedObjects.length;
+
+        const precomputation = [];
+        if (collectTrace) {
+          for (let i = 0; i < numObjects; i += 1) {
+            const obj = sortedObjects[i];
+            precomputation.push({
+              obj_id: obj.obj_id,
+              value: obj.value,
+              burn_time: obj.burn_time,
+              deadline: tMax - obj.burn_time,
+              coeff: Math.max(...lossTable[i]),
+              sort_position: i + 1,
+            });
+          }
+        }
+
         let bestLoss = Number.POSITIVE_INFINITY;
         let bestAssignment = null;
+        let callCounter = 0;
+        const dfsCallLog = [];
+        const bestFoundHistory = [];
+        const cellIndices = Array.from({ length: numCells }, (_, i) => i);
 
         function optimisticLowerBound(startIdx, remainingCellIds) {
-          const remainingCoeffs = sortedObjects
-            .slice(startIdx)
-            .map((obj) => coeffByObj.get(obj.obj_id))
-            .sort((a, b) => b - a);
-          const remainingRisks = remainingCellIds.map((i) => risks[i]).sort((a, b) => a - b);
-          const k = Math.min(remainingCoeffs.length, remainingRisks.length);
-          let sum = 0;
-          for (let i = 0; i < k; i += 1) sum += remainingCoeffs[i] * remainingRisks[i];
-          return sum;
+          let bound = 0;
+          for (let objIdx = startIdx; objIdx < numObjects; objIdx += 1) {
+            let minLoss = Number.POSITIVE_INFINITY;
+            for (const cellIdx of remainingCellIds) {
+              const value = lossTable[objIdx][cellIdx];
+              if (value < minLoss) minLoss = value;
+            }
+            bound += minLoss;
+          }
+          return bound;
+        }
+
+        function buildAssignmentSummary(assignmentMap) {
+          return parsed.map((obj) => {
+            const cellIdx = assignmentMap.get(obj.obj_id);
+            const row = Math.floor(cellIdx / m);
+            const col = cellIdx % m;
+            const deadline = tMax - obj.burn_time;
+            const reachable = deadline >= 0 ? reachableCount(row, col, Math.floor(deadline)) : 0;
+            const contrib = expectedLossCoeff(row, col, obj);
+            return {
+              obj_id: obj.obj_id,
+              row,
+              col,
+              reachable_sources: reachable,
+              expected_contribution: contrib,
+            };
+          });
         }
 
         function dfs(objIdx, remainingCellIds, currentLoss, assignment) {
-          if (objIdx >= sortedObjects.length) {
+          if (objIdx >= numObjects) {
             if (currentLoss < bestLoss) {
               bestLoss = currentLoss;
               bestAssignment = new Map(assignment);
@@ -1266,35 +1625,96 @@
           if (lb >= bestLoss) return;
 
           const obj = sortedObjects[objIdx];
-          const coeff = coeffByObj.get(obj.obj_id);
-          const candidateCells = [...remainingCellIds].sort((a, b) => risks[a] - risks[b]);
+          const candidateCells = [...remainingCellIds].sort((a, b) => lossTable[objIdx][a] - lossTable[objIdx][b]);
+
           for (const cellIdx of candidateCells) {
-            assignment.set(obj.obj_id, cellIdx);
-            const nextCells = remainingCellIds.filter((id) => id !== cellIdx);
-            dfs(objIdx + 1, nextCells, currentLoss + coeff * risks[cellIdx], assignment);
-            assignment.delete(obj.obj_id);
+            callCounter += 1;
+            const callNo = callCounter;
+            const row = Math.floor(cellIdx / m);
+            const col = cellIdx % m;
+            const deadline = tMax - obj.burn_time;
+            const reachable = deadline >= 0 ? reachableCount(row, col, Math.floor(deadline)) : 0;
+            const contribution = lossTable[objIdx][cellIdx];
+            const currentAfter = currentLoss + contribution;
+            const nextCells = remainingCellIds.filter((c) => c !== cellIdx);
+            const nodeLowerBound = currentAfter + optimisticLowerBound(objIdx + 1, nextCells);
+            const bestAtCall = bestLoss;
+
+            let action = "pruned";
+            if (nodeLowerBound < bestLoss) {
+              action = "recurse";
+              assignment.set(obj.obj_id, cellIdx);
+              const bestBefore = bestLoss;
+              dfs(objIdx + 1, nextCells, currentAfter, assignment);
+              assignment.delete(obj.obj_id);
+              if (bestLoss < bestBefore) {
+                action = "new best";
+                if (collectTrace && bestAssignment) {
+                  bestFoundHistory.push({
+                    call_no: callNo,
+                    loss: bestLoss,
+                    assignment: buildAssignmentSummary(bestAssignment),
+                  });
+                }
+              }
+            }
+
+            if (collectTrace) {
+              dfsCallLog.push({
+                call_no: callNo,
+                depth: objIdx + 1,
+                obj_id: obj.obj_id,
+                row,
+                col,
+                reachable_sources: reachable,
+                contribution,
+                current_loss: currentAfter,
+                lower_bound: nodeLowerBound,
+                best_loss_at_call: Number.isFinite(bestAtCall) ? bestAtCall : null,
+                action,
+              });
+            }
           }
         }
 
         dfs(0, cellIndices, 0, new Map());
-
-        if (!bestAssignment) return { best_loss: 0, assignment: [] };
+        if (!bestAssignment) {
+          const empty = { best_loss: 0, assignment: [] };
+          if (collectTrace) {
+            empty.trace = {
+              precomputation,
+              dfs_call_log: dfsCallLog,
+              best_found_history: bestFoundHistory,
+              final_assignment_summary: [],
+            };
+          }
+          return empty;
+        }
 
         const assignmentOut = parsed.map((obj) => {
           const cellIdx = bestAssignment.get(obj.obj_id);
-          const [row, col, risk] = cells[cellIdx];
+          const row = Math.floor(cellIdx / m);
+          const col = cellIdx % m;
           return {
             obj_id: obj.obj_id,
             row,
             col,
-            expected_contribution: Number(coeffByObj.get(obj.obj_id) * risk),
+            expected_contribution: expectedLossCoeff(row, col, obj),
           };
         });
-
-        return {
+        const result = {
           best_loss: Number(bestLoss),
           assignment: assignmentOut,
         };
+        if (collectTrace) {
+          result.trace = {
+            precomputation,
+            dfs_call_log: dfsCallLog,
+            best_found_history: bestFoundHistory,
+            final_assignment_summary: buildAssignmentSummary(bestAssignment),
+          };
+        }
+        return result;
       }
 
       async function runSolve() {
@@ -1314,6 +1734,8 @@
           const payload = {
             n: state.n,
             m: state.m,
+            t_max: state.t_max,
+            collect_trace: true,
             objects: state.objects.map((obj) => ({
               obj_id: obj.obj_id,
               value: obj.value,
@@ -1335,6 +1757,10 @@
 
           state.bestLoss = Number(data.best_loss ?? 0);
           el.bestLoss.textContent = Number(state.bestLoss).toFixed(4);
+          state.optimizerResult = data;
+          state.optimizerTrace = data.trace || null;
+          state.tracePage = 0;
+          renderOptimizerPanels();
 
           clearSimulation();
           renderObjectList();
@@ -1354,6 +1780,7 @@
         state.source = null;
         state.bestLoss = null;
         el.bestLoss.textContent = "-";
+        clearOptimizerState();
         clearSimulation();
         renderObjectList();
         renderGrid();
@@ -1379,7 +1806,7 @@
             n: state.n,
             m: state.m,
             cell_burn_duration: state.cell_burn_duration,
-            max_time: state.max_time,
+            max_time: state.t_max,
             dt: state.dt,
             objects_at_cells: placed,
           };
@@ -1440,6 +1867,7 @@
           col: null,
         });
 
+        clearOptimizerState();
         renderObjectList();
         renderGrid();
       }
@@ -1450,8 +1878,18 @@
         el.clearBtn.addEventListener("click", runClearPlacement);
         el.simulateSourceBtn.addEventListener("click", () => runSimulation("source"));
         el.simulateUniformBtn.addEventListener("click", () => runSimulation("uniform"));
+        el.optimizerResultsTabBtn.addEventListener("click", () => setOptimizerTab("results"));
+        el.optimizerTraceTabBtn.addEventListener("click", () => setOptimizerTab("trace"));
+        el.tracePrevBtn.addEventListener("click", () => {
+          state.tracePage -= 1;
+          renderTracePanel();
+        });
+        el.traceNextBtn.addEventListener("click", () => {
+          state.tracePage += 1;
+          renderTracePanel();
+        });
 
-        for (const input of [el.nInput, el.mInput, el.cellBurnDurationInput, el.maxTimeInput, el.dtInput]) {
+        for (const input of [el.nInput, el.mInput, el.cellBurnDurationInput, el.tMaxInput, el.dtInput]) {
           input.addEventListener("change", applyGridSizeChanges);
         }
 
@@ -1517,6 +1955,7 @@
         bindEvents();
         setupGrid();
         renderObjectList();
+        renderOptimizerPanels();
         updateStepUI();
       }
 

@@ -26,13 +26,16 @@ objects to cells using branch-and-bound with an optimistic lower bound.
 
 Backward compatibility
 ----------------------
-The public API is unchanged:
-    solve_global_expected_loss(n, m, objects, t_max=10) -> dict
+Public API now supports optional tracing:
+    solve_global_expected_loss(n, m, objects, t_max=10, collect_trace=False)
 
-`t_max` defaults to 10 so existing callers that omit it continue to work.
-`flammability` is accepted on each object (and stored) but is not used in
-the loss formula, matching the agreed model.  Removing it from the struct
-would break callers that pass it in.
+- `t_max` defaults to 10 so existing callers that omit it continue to work.
+- when `collect_trace=False` the return shape stays:
+      {"best_loss": float, "assignment": [...]}
+- when `collect_trace=True`, an additional `"trace"` key is included.
+- `flammability` is accepted on each object (and stored) but is not used in
+  the loss formula, matching the agreed model.  Removing it from the struct
+  would break callers that pass it in.
 """
 
 from dataclasses import dataclass
@@ -158,6 +161,7 @@ def solve_global_expected_loss(
     m: int,
     objects: Sequence[Dict[str, Any]],
     t_max: int = 10,                   # NEW — defaults to 10 for back-compat
+    collect_trace: bool = False,
 ) -> Dict[str, Any]:
     """Solve object-to-cell assignment minimising expected loss.
 
@@ -177,9 +181,22 @@ def solve_global_expected_loss(
         "best_loss"  : float,
         "assignment" : [{"obj_id", "row", "col", "expected_contribution"}, ...]
     }
+
+    When collect_trace=True:
+    {
+      ...existing fields...,
+      "trace": {
+        "precomputation": [...],
+        "dfs_call_log": [...],
+        "best_found_history": [...],
+        "final_assignment_summary": [...]
+      }
+    }
     """
     if n <= 0 or m <= 0:
         raise ValueError("n and m must be positive")
+    if int(t_max) <= 0:
+        raise ValueError("t_max must be a positive integer")
 
     parsed = _parse_objects(objects)
     if len(parsed) > n * m:
@@ -190,12 +207,18 @@ def solve_global_expected_loss(
 
     # loss_table[sorted_obj_idx][cell_idx] = E[L] for that (obj, cell) pair.
     # sorted_obj_order maps sorted position -> original parsed index.
+    t_max = int(t_max)
     loss_table, sorted_obj_order = _precompute_loss_table(parsed, n, m, t_max)
     sorted_objects = [parsed[i] for i in sorted_obj_order]
     num_objects = len(sorted_objects)
 
     best_loss: float = float("inf")
     best_assignment: Optional[Dict[str, int]] = None
+    call_counter = 0
+
+    precomputation_rows: List[Dict[str, Any]] = []
+    dfs_call_log: List[Dict[str, Any]] = []
+    best_found_history: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # Optimistic lower bound
@@ -223,7 +246,7 @@ def solve_global_expected_loss(
             remaining_cell_ids: List[int],
             current_loss: float,
             assignment: Dict[str, int]) -> None:
-        nonlocal best_loss, best_assignment
+        nonlocal best_loss, best_assignment, call_counter
 
         # Leaf: all objects placed.
         if obj_idx >= num_objects:
@@ -245,32 +268,126 @@ def solve_global_expected_loss(
                                  key=lambda c: loss_table[obj_idx][c])
 
         for cell_idx in candidate_cells:
+            call_counter += 1
+            call_no = call_counter
             contrib = loss_table[obj_idx][cell_idx]
-            assignment[obj.obj_id] = cell_idx
+            r, c = divmod(cell_idx, m)
+            deadline = t_max - obj.burn_time
+            reachable_sources = _reachable_count(r, c, int(deadline), n, m) if deadline >= 0 else 0
+            current_loss_after = current_loss + contrib
             next_cells = [c for c in remaining_cell_ids if c != cell_idx]
-            dfs(obj_idx + 1, next_cells,
-                current_loss + contrib, assignment)
-            assignment.pop(obj.obj_id, None)
+            node_lower_bound = current_loss_after + optimistic_lower_bound(obj_idx + 1, next_cells)
+            best_loss_at_call = best_loss
+
+            action = "pruned"
+            if node_lower_bound < best_loss:
+                action = "recurse"
+                assignment[obj.obj_id] = cell_idx
+                best_before = best_loss
+                dfs(obj_idx + 1, next_cells, current_loss_after, assignment)
+                assignment.pop(obj.obj_id, None)
+
+                if best_loss < best_before:
+                    action = "new best"
+                    if collect_trace and best_assignment is not None:
+                        snapshot_rows: List[Dict[str, Any]] = []
+                        for original_obj in parsed:
+                            best_cell_idx = best_assignment[original_obj.obj_id]
+                            br, bc = divmod(best_cell_idx, m)
+                            b_deadline = t_max - original_obj.burn_time
+                            b_reachable = (
+                                _reachable_count(br, bc, int(b_deadline), n, m)
+                                if b_deadline >= 0 else 0
+                            )
+                            b_contrib = _expected_loss_coeff(br, bc, original_obj, t_max, n, m)
+                            snapshot_rows.append({
+                                "obj_id": original_obj.obj_id,
+                                "row": br,
+                                "col": bc,
+                                "reachable_sources": int(b_reachable),
+                                "expected_contribution": float(b_contrib),
+                            })
+                        best_found_history.append({
+                            "call_no": call_no,
+                            "loss": float(best_loss),
+                            "assignment": snapshot_rows,
+                        })
+
+            if collect_trace:
+                dfs_call_log.append({
+                    "call_no": call_no,
+                    "depth": obj_idx + 1,
+                    "obj_id": obj.obj_id,
+                    "row": r,
+                    "col": c,
+                    "reachable_sources": int(reachable_sources),
+                    "contribution": float(contrib),
+                    "current_loss": float(current_loss_after),
+                    "lower_bound": float(node_lower_bound),
+                    "best_loss_at_call": None if best_loss_at_call == float("inf") else float(best_loss_at_call),
+                    "action": action,
+                })
+
+    if collect_trace:
+        # Build precomputation rows in sort order with worst-case contribution.
+        for sort_pos, obj in enumerate(sorted_objects, start=1):
+            row_losses = loss_table[sort_pos - 1]
+            worst_case_coeff = max(row_losses) if row_losses else 0.0
+            deadline = t_max - obj.burn_time
+            precomputation_rows.append({
+                "obj_id": obj.obj_id,
+                "value": float(obj.value),
+                "burn_time": float(obj.burn_time),
+                "deadline": float(deadline),
+                "coeff": float(worst_case_coeff),
+                "sort_position": sort_pos,
+            })
 
     dfs(0, cell_indices, 0.0, {})
 
     if best_assignment is None:
-        return {"best_loss": 0.0, "assignment": []}
+        result: Dict[str, Any] = {"best_loss": 0.0, "assignment": []}
+        if collect_trace:
+            result["trace"] = {
+                "precomputation": precomputation_rows,
+                "dfs_call_log": dfs_call_log,
+                "best_found_history": best_found_history,
+                "final_assignment_summary": [],
+            }
+        return result
 
     # Reconstruct in original input order for stable visualiser output.
     assignment_entries: List[AssignmentEntry] = []
+    final_assignment_summary: List[Dict[str, Any]] = []
     for obj in parsed:
         cell_idx = best_assignment[obj.obj_id]
         r, c = divmod(cell_idx, m)
         contrib = _expected_loss_coeff(r, c, obj, t_max, n, m)
+        deadline = t_max - obj.burn_time
+        reachable_sources = _reachable_count(r, c, int(deadline), n, m) if deadline >= 0 else 0
         assignment_entries.append(AssignmentEntry(
             obj_id=obj.obj_id,
             row=r,
             col=c,
             expected_contribution=float(contrib),
         ))
+        final_assignment_summary.append({
+            "obj_id": obj.obj_id,
+            "row": r,
+            "col": c,
+            "reachable_sources": int(reachable_sources),
+            "expected_contribution": float(contrib),
+        })
 
-    return {
+    result = {
         "best_loss": float(best_loss),
         "assignment": [e.__dict__ for e in assignment_entries],
     }
+    if collect_trace:
+        result["trace"] = {
+            "precomputation": precomputation_rows,
+            "dfs_call_log": dfs_call_log,
+            "best_found_history": best_found_history,
+            "final_assignment_summary": final_assignment_summary,
+        }
+    return result

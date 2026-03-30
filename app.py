@@ -31,6 +31,21 @@ def _as_float(payload: Dict[str, Any], key: str) -> float:
     return float(payload[key])
 
 
+def _as_bool(payload: Dict[str, Any], key: str, default: bool = False) -> bool:
+    if key not in payload:
+        return default
+    return bool(payload[key])
+
+
+def _resolve_max_time(payload: Dict[str, Any]) -> float:
+    """Use explicit max_time when provided, else fall back to t_max."""
+    if "max_time" in payload:
+        return float(payload["max_time"])
+    if "t_max" in payload:
+        return float(int(payload["t_max"]))
+    raise ValueError("Missing key: max_time (or t_max)")
+
+
 def _serialize_step(step: SimulationStep) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "t": float(step.t),
@@ -86,11 +101,19 @@ def solve_endpoint():
 
         n = _as_int(payload, "n")
         m = _as_int(payload, "m")
+        t_max = int(payload.get("t_max", 10))
+        collect_trace = _as_bool(payload, "collect_trace", False)
         objects = payload.get("objects", [])
         if not isinstance(objects, list):
             raise ValueError("objects must be a list")
 
-        result = solve_global_expected_loss(n=n, m=m, objects=objects)
+        result = solve_global_expected_loss(
+            n=n,
+            m=m,
+            objects=objects,
+            t_max=t_max,
+            collect_trace=collect_trace,
+        )
         return jsonify(result)
 
     except ValueError as exc:
@@ -112,7 +135,7 @@ def simulate_endpoint():
         n = _as_int(payload, "n")
         m = _as_int(payload, "m")
         cell_burn_duration = _as_float(payload, "cell_burn_duration")
-        max_time = _as_float(payload, "max_time")
+        max_time = _resolve_max_time(payload)
         dt = _as_float(payload, "dt")
         source_r = _as_int(payload, "source_r")
         source_c = _as_int(payload, "source_c")
@@ -153,7 +176,7 @@ def simulate_uniform_endpoint():
         n = _as_int(payload, "n")
         m = _as_int(payload, "m")
         cell_burn_duration = _as_float(payload, "cell_burn_duration")
-        max_time = _as_float(payload, "max_time")
+        max_time = _resolve_max_time(payload)
         dt = _as_float(payload, "dt")
         objects_at_cells = payload.get("objects_at_cells", [])
 
