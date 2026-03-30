@@ -194,12 +194,6 @@ def solve_global_expected_loss(
     sorted_objects = [parsed[i] for i in sorted_obj_order]
     num_objects = len(sorted_objects)
 
-    # For each object (in sorted order), precompute the sorted cell losses
-    # (ascending) to support fast lower-bound computation.
-    sorted_cell_losses: List[List[float]] = [
-        sorted(loss_table[i]) for i in range(num_objects)
-    ]
-
     best_loss: float = float("inf")
     best_assignment: Optional[Dict[str, int]] = None
 

@@ -321,6 +321,28 @@
       min-height: 16px;
     }
 
+    .loading-indicator {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #334155;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #cbd5e1;
+      border-top-color: #1f6feb;
+      border-radius: 999px;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     @media (max-width: 980px) {
       .app {
         flex-direction: column;
@@ -389,6 +411,10 @@
       <div class="row">
         <button id="solveBtn">Find optimal placement (B&amp;B)</button>
         <button id="clearBtn" class="ghost">Clear placement</button>
+      </div>
+      <div id="solveLoading" class="loading-indicator" hidden>
+        <span class="spinner"></span>
+        <span>Finding optimal placement...</span>
       </div>
       <div class="small" style="margin-top:6px;">best_loss: <span id="bestLoss">-</span></div>
 
@@ -480,6 +506,7 @@
         addObjectBtn: document.getElementById("addObjectBtn"),
         objectList: document.getElementById("objectList"),
         solveBtn: document.getElementById("solveBtn"),
+        solveLoading: document.getElementById("solveLoading"),
         clearBtn: document.getElementById("clearBtn"),
         bestLoss: document.getElementById("bestLoss"),
         simulateSourceBtn: document.getElementById("simulateSourceBtn"),
@@ -534,6 +561,13 @@
         state.currentStep = 0;
         state.simMode = null;
         updateStepUI();
+      }
+
+      function setSolveLoading(isLoading) {
+        el.solveBtn.disabled = isLoading;
+        if (el.solveLoading) {
+          el.solveLoading.hidden = !isLoading;
+        }
       }
 
       function objectAtCell(r, c) {
@@ -1242,21 +1276,7 @@
           }
         }
 
-        if (sortedObjects.length > 11) {
-          const greedyCells = [...cellIndices].sort((a, b) => risks[a] - risks[b]);
-          let loss = 0;
-          const assignment = new Map();
-          for (let i = 0; i < sortedObjects.length; i += 1) {
-            const obj = sortedObjects[i];
-            const cellIdx = greedyCells[i];
-            assignment.set(obj.obj_id, cellIdx);
-            loss += coeffByObj.get(obj.obj_id) * risks[cellIdx];
-          }
-          bestLoss = loss;
-          bestAssignment = assignment;
-        } else {
-          dfs(0, cellIndices, 0, new Map());
-        }
+        dfs(0, cellIndices, 0, new Map());
 
         if (!bestAssignment) return { best_loss: 0, assignment: [] };
 
@@ -1277,7 +1297,7 @@
         };
       }
 
-      function runSolve() {
+      async function runSolve() {
         showError("");
         syncConfigFromInputs();
 
@@ -1285,6 +1305,10 @@
           showError("Add at least one object before solving.");
           return;
         }
+
+        setSolveLoading(true);
+        // Yield one frame so the spinner can paint before heavy sync work starts.
+        await new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
         try {
           const payload = {
@@ -1317,6 +1341,8 @@
           renderGrid();
         } catch (error) {
           showError(String(error.message || error));
+        } finally {
+          setSolveLoading(false);
         }
       }
 
