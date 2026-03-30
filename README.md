@@ -1,40 +1,104 @@
-# Fire Spread Grid Visualizer
+Core Algorithm: Branch-and-Bound Assignment (what branch_and_bound.py does)
+The goal is to assign objects to grid cells to minimize total expected loss, where loss = (value × flammability / burn_resistance) × cell_risk.
 
-A single-page, fully client-side fire spread simulator.
+Precompute
+for each cell in the n×m grid:
+    centrality = how close it is (on average) to all other cells
+    risk = 0.2 + 0.8 × centrality        // central cells are riskier
 
-## Hosting on GitHub Pages (no backend needed)
+for each object:
+    coeff = value × flammability / (1 + burn_time)   // loss-per-unit-risk
 
-This app now runs 100% in the browser. No Flask server is required for deployment.
+sort objects by coeff descending            // high-impact objects first
 
-### Deploy steps
+DFS with Branch-and-Bound
+dfs(obj_index, remaining_cells, current_loss, assignment):
 
-1. Commit and push this repo to GitHub.
-2. In GitHub, open **Settings -> Pages**.
-3. Under **Build and deployment**, select:
-   - **Source**: Deploy from a branch
-   - **Branch**: `main` (or your branch)
-   - **Folder**: `/docs`
-4. Save. GitHub Pages will publish `docs/index.html`.
+    if all objects placed:
+        update best_loss and best_assignment if current_loss is better
+        return
 
-Your site URL will be:
+    // Pruning: compute an optimistic (lowest possible) future loss
+    //   pair highest remaining coeffs with lowest remaining risks
+    lower_bound = current_loss + sum(coeff[i] × risk[i])
+                                  for i in min(remaining_objs, remaining_cells)
+                                  sorted optimistically
 
-`https://<username>.github.io/<repo>/`
+    if lower_bound >= best_loss:
+        return                              // prune this branch
 
-## Local preview
+    // Try placing current object into each remaining cell
+    // sorted safest-first (lowest risk) to find good solutions early
+    for cell in remaining_cells sorted by risk ascending:
+        assign object → cell
+        dfs(obj_index + 1,
+            remaining_cells − {cell},
+            current_loss + coeff × cell.risk,
+            assignment)
+        unassign object
 
-You can open `static/index.html` directly in a browser, or run a simple static server:
+Two key pruning ideas working together
+TechniqueHowOptimistic boundPairs best coeffs with cheapest risks — if even this ideal future can't beat the current best, pruneSafest-cell-first ordering
 
-```bash
-python3 -m http.server 8000
-```
 
-Then open `http://localhost:8000/docs/`.
 
-## Notes
 
-- The UI includes:
-  - object placement and fire source selection
-  - branch-and-bound-style placement solver (in JS)
-  - simulation from source
-  - uniform-source simulation
-  - playback controls, scrubber, cumulative loss, and per-object status table
+Two Simulation Algorithms (what fire_simulator.py does)
+
+simulate_from_source — Deterministic Fire Spread
+A single fire starts at one source cell and spreads outward tick by tick.
+setup:
+    ignite source cell at t=0
+    object_exposure[obj] = 0 for all objects
+
+for each timestep t:
+
+    // Spread fire
+    for each currently burning cell:
+        for each neighbor cell (up/down/left/right):
+            if not burning and not burnt out:
+                ignite it, record ignite_time
+
+    // Burn out cells that have been burning long enough
+    for each burning cell:
+        if (t - ignite_time) >= cell_burn_duration:
+            mark as burnt_out (no longer burning)
+
+    // Update object destruction
+    for each object not yet destroyed:
+        if object's cell is burning:
+            exposure += dt
+        if exposure >= burn_time:
+            destroy object, add value to cumulative_loss
+
+    record SimulationStep snapshot
+Key behavior: fire spreads one cell per tick in 4 directions, cells burn for cell_burn_duration then go cold.
+
+simulate_uniform — Expected-Value Fire Spread
+Assumes the fire source is equally likely to start anywhere. Runs simulate_from_source once per possible source cell (all n×m of them), then aggregates.
+// Monte Carlo over all possible ignition points
+for each cell (r, c) as source:
+    run simulate_from_source → one full run of steps
+
+// Aggregate across all n×m runs
+for each timestep i:
+    for each cell (r, c):
+        P(burning) = count of runs where cell is burning / total runs
+        P(burnt_out) = count of runs where cell is burnt_out / total runs
+
+    for each object:
+        P(destroyed by t) = count of runs where obj destroyed by t / total runs
+
+// Build consensus snapshot
+    fire_front     = cells where P(burning) >= 0.5
+    newly_ignited  = cells that crossed the 0.5 threshold this tick
+    expected_loss  = sum over objects of (value × P(destroyed))
+
+How they relate
+simulate_uniform
+    └─ calls simulate_from_source n×m times
+         (once per possible fire origin)
+    └─ averages the results into probability fields
+         → expected_fire_grid[r][c]  = P(cell is burning at time t)
+         → expected_loss_by_obj[id]  = P(object is destroyed by time t)
+The first gives you a single deterministic scenario; the second gives you risk-weighted expected outcomes across all scenarios.
