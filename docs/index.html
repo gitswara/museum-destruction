@@ -1,0 +1,1501 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fire Spread Grid Visualizer</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d7dde5;
+      --text: #1f2933;
+      --muted: #6b7280;
+      --accent: #1f6feb;
+      --danger: #b42318;
+      --cell-size: 28px;
+      --cell-gap: 2px;
+      --default-cell: #e5e7eb;
+      --burning: #ff8f2f;
+      --burnt: #444a53;
+      --ignite: #ffdf5e;
+      --destroy: #ff2f2f;
+      --source: #0ea5a1;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 15% 20%, #ffffff 0%, #f4f5f8 45%, #edf1f6 100%);
+      min-height: 100vh;
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 340px;
+      min-width: 320px;
+      max-width: 360px;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      padding: 14px;
+      overflow-y: auto;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 12px;
+      gap: 10px;
+    }
+
+    h1 {
+      margin: 4px 0 10px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    h2 {
+      margin: 16px 0 8px;
+      font-size: 14px;
+      color: #111827;
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .grid-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #334155;
+    }
+
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #fff;
+      background: var(--accent);
+    }
+
+    button.secondary {
+      background: #4b5563;
+    }
+
+    button.ghost {
+      background: #fff;
+      color: #334155;
+      border-color: var(--line);
+    }
+
+    button.danger {
+      background: var(--danger);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .object-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .object-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px;
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,0.18);
+    }
+
+    .grid-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .modes {
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+      color: #1f2937;
+    }
+
+    .modes label {
+      flex-direction: row;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+    }
+
+    .board-wrap {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #f8fafc, #f0f4f8);
+      flex: 1;
+      min-height: 260px;
+      padding: 10px;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .grid {
+      display: grid;
+      gap: var(--cell-gap);
+      align-content: center;
+      justify-content: center;
+    }
+
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      border-radius: 4px;
+      background: var(--default-cell);
+      border: 1px solid rgba(0,0,0,0.08);
+      transition: background-color 0.18s linear, transform 0.08s ease;
+      position: relative;
+    }
+
+    .cell.interactive:hover {
+      transform: translateY(-1px);
+      border-color: rgba(0,0,0,0.22);
+    }
+
+    .cell.source {
+      outline: 3px solid var(--source);
+      outline-offset: -3px;
+    }
+
+    .cell.burning {
+      background: var(--burning);
+      animation: burnPulse 1s ease-in-out infinite;
+    }
+
+    .cell.burnt {
+      background: var(--burnt);
+    }
+
+    .cell.flash-ignite {
+      animation: igniteFlash 0.45s ease-out;
+    }
+
+    .cell.flash-destroy::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 4px;
+      background: var(--destroy);
+      opacity: 0.82;
+      animation: destroyFlash 0.5s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes burnPulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 143, 47, 0.25); }
+      70% { box-shadow: 0 0 0 7px rgba(255, 143, 47, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 143, 47, 0); }
+    }
+
+    @keyframes igniteFlash {
+      0% { background: var(--ignite); }
+      100% { background: var(--burning); }
+    }
+
+    @keyframes destroyFlash {
+      0% { opacity: 0.95; }
+      100% { opacity: 0; }
+    }
+
+    .controls {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .controls-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .scrubber {
+      width: 100%;
+    }
+
+    .stats {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    thead { background: #eff3f7; }
+
+    th, td {
+      border-bottom: 1px solid #e8edf2;
+      padding: 7px;
+      text-align: left;
+    }
+
+    td.right, th.right { text-align: right; }
+
+    .status-safe { color: #0f766e; }
+    .status-burning { color: #b45309; font-weight: 600; }
+    .status-destroyed { color: #b91c1c; font-weight: 600; }
+
+    .error {
+      color: #991b1b;
+      font-size: 12px;
+      min-height: 16px;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        width: 100%;
+        max-width: none;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .main {
+        min-height: 0;
+      }
+
+      .board-wrap {
+        min-height: 360px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>Fire Spread Visualizer</h1>
+      <div class="grid-fields">
+        <label>Rows n
+          <input id="nInput" type="number" min="1" value="10" />
+        </label>
+        <label>Columns m
+          <input id="mInput" type="number" min="1" value="10" />
+        </label>
+        <label>Cell Burn Duration
+          <input id="cellBurnDurationInput" type="number" min="0.01" step="0.1" value="2" />
+        </label>
+        <label>Max Time
+          <input id="maxTimeInput" type="number" min="0.1" step="0.1" value="12" />
+        </label>
+        <label>dt
+          <input id="dtInput" type="number" min="0.01" step="0.1" value="1" />
+        </label>
+      </div>
+
+      <h2>Add Object</h2>
+      <div class="grid-fields">
+        <label>Value
+          <input id="objValueInput" type="number" min="0" step="1" value="10" />
+        </label>
+        <label>Burn Time
+          <input id="objBurnTimeInput" type="number" min="0" step="0.1" value="2" />
+        </label>
+        <label>Flammability
+          <input id="objFlammabilityInput" type="number" min="0" step="0.1" value="1" />
+        </label>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="addObjectBtn">Add Object</button>
+      </div>
+
+      <div id="objectList" class="object-list"></div>
+
+      <h2>Optimization</h2>
+      <div class="row">
+        <button id="solveBtn">Find optimal placement (B&amp;B)</button>
+        <button id="clearBtn" class="ghost">Clear placement</button>
+      </div>
+      <div class="small" style="margin-top:6px;">best_loss: <span id="bestLoss">-</span></div>
+
+      <h2>Actions</h2>
+      <div class="row">
+        <button id="simulateSourceBtn" class="secondary">Simulate from source</button>
+        <button id="simulateUniformBtn" class="secondary">Simulate uniform</button>
+      </div>
+      <div id="errorBox" class="error"></div>
+      <div class="small">Runs fully in-browser and is ready for static hosting (GitHub Pages).</div>
+    </aside>
+
+    <main class="main">
+      <div class="grid-top">
+        <div class="modes">
+          <label><input type="radio" name="mode" value="place" checked /> Place objects</label>
+          <label><input type="radio" name="mode" value="source" /> Set fire source</label>
+          <label><input type="radio" name="mode" value="view" /> View</label>
+        </div>
+        <div class="small" id="stepInfo">No simulation loaded</div>
+      </div>
+
+      <div id="boardWrap" class="board-wrap">
+        <div id="grid" class="grid"></div>
+      </div>
+
+      <section class="controls">
+        <div class="controls-top">
+          <button id="rewindBtn" class="ghost">|&lt;</button>
+          <button id="backBtn" class="ghost">&lt;</button>
+          <button id="playPauseBtn" class="ghost">Play</button>
+          <button id="forwardBtn" class="ghost">&gt;</button>
+          <button id="endBtn" class="ghost">&gt;|</button>
+        </div>
+        <input id="scrubber" class="scrubber" type="range" min="0" max="0" value="0" step="1" />
+        <div class="stats">
+          <div>t = <span id="timeDisplay">0.0</span></div>
+          <div>Cumulative loss: <strong id="lossDisplay">0.0</strong></div>
+        </div>
+      </section>
+
+      <section>
+        <table>
+          <thead>
+            <tr>
+              <th>obj_id</th>
+              <th class="right">value</th>
+              <th>Status</th>
+              <th class="right">expected_loss_by_obj</th>
+            </tr>
+          </thead>
+          <tbody id="lossTableBody"></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const palette = ["#dc2626", "#2563eb", "#16a34a", "#7e22ce", "#c2410c", "#0f766e", "#db2777", "#4f46e5"];
+
+      const state = {
+        n: 10,
+        m: 10,
+        cell_burn_duration: 2,
+        max_time: 12,
+        dt: 1,
+        objects: [],
+        objectCounter: 1,
+        source: null,
+        mode: "place",
+        steps: [],
+        currentStep: 0,
+        simMode: null,
+        isPlaying: false,
+        playTimer: null,
+        bestLoss: null,
+      };
+
+      const el = {
+        nInput: document.getElementById("nInput"),
+        mInput: document.getElementById("mInput"),
+        cellBurnDurationInput: document.getElementById("cellBurnDurationInput"),
+        maxTimeInput: document.getElementById("maxTimeInput"),
+        dtInput: document.getElementById("dtInput"),
+        objValueInput: document.getElementById("objValueInput"),
+        objBurnTimeInput: document.getElementById("objBurnTimeInput"),
+        objFlammabilityInput: document.getElementById("objFlammabilityInput"),
+        addObjectBtn: document.getElementById("addObjectBtn"),
+        objectList: document.getElementById("objectList"),
+        solveBtn: document.getElementById("solveBtn"),
+        clearBtn: document.getElementById("clearBtn"),
+        bestLoss: document.getElementById("bestLoss"),
+        simulateSourceBtn: document.getElementById("simulateSourceBtn"),
+        simulateUniformBtn: document.getElementById("simulateUniformBtn"),
+        errorBox: document.getElementById("errorBox"),
+        stepInfo: document.getElementById("stepInfo"),
+        boardWrap: document.getElementById("boardWrap"),
+        grid: document.getElementById("grid"),
+        rewindBtn: document.getElementById("rewindBtn"),
+        backBtn: document.getElementById("backBtn"),
+        playPauseBtn: document.getElementById("playPauseBtn"),
+        forwardBtn: document.getElementById("forwardBtn"),
+        endBtn: document.getElementById("endBtn"),
+        scrubber: document.getElementById("scrubber"),
+        timeDisplay: document.getElementById("timeDisplay"),
+        lossDisplay: document.getElementById("lossDisplay"),
+        lossTableBody: document.getElementById("lossTableBody"),
+        modeInputs: [...document.querySelectorAll('input[name="mode"]')],
+      };
+
+      function showError(message) {
+        el.errorBox.textContent = message || "";
+      }
+
+      function parsePositiveInt(value, fallback) {
+        const n = Number.parseInt(value, 10);
+        return Number.isFinite(n) && n > 0 ? n : fallback;
+      }
+
+      function parsePositiveFloat(value, fallback) {
+        const n = Number.parseFloat(value);
+        return Number.isFinite(n) && n > 0 ? n : fallback;
+      }
+
+      function syncConfigFromInputs() {
+        state.n = parsePositiveInt(el.nInput.value, state.n);
+        state.m = parsePositiveInt(el.mInput.value, state.m);
+        state.cell_burn_duration = parsePositiveFloat(el.cellBurnDurationInput.value, state.cell_burn_duration);
+        state.max_time = parsePositiveFloat(el.maxTimeInput.value, state.max_time);
+        state.dt = parsePositiveFloat(el.dtInput.value, state.dt);
+
+        el.nInput.value = state.n;
+        el.mInput.value = state.m;
+        el.cellBurnDurationInput.value = state.cell_burn_duration;
+        el.maxTimeInput.value = state.max_time;
+        el.dtInput.value = state.dt;
+      }
+
+      function clearSimulation() {
+        pausePlayback();
+        state.steps = [];
+        state.currentStep = 0;
+        state.simMode = null;
+        updateStepUI();
+      }
+
+      function objectAtCell(r, c) {
+        return state.objects.find((obj) => obj.row === r && obj.col === c) || null;
+      }
+
+      function nextUnplacedObject() {
+        return state.objects.find((obj) => obj.row === null || obj.col === null) || null;
+      }
+
+      function dimHex(hex, alpha) {
+        const clean = hex.replace("#", "");
+        const value = Number.parseInt(clean, 16);
+        const r = (value >> 16) & 255;
+        const g = (value >> 8) & 255;
+        const b = value & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+
+      function resizeGrid() {
+        const w = Math.max(220, el.boardWrap.clientWidth - 30);
+        const h = Math.max(220, el.boardWrap.clientHeight - 30);
+        const cell = Math.max(16, Math.floor(Math.min(w / state.m, h / state.n)) - 2);
+        document.documentElement.style.setProperty("--cell-size", `${cell}px`);
+      }
+
+      function setupGrid() {
+        el.grid.innerHTML = "";
+        el.grid.style.gridTemplateColumns = `repeat(${state.m}, var(--cell-size))`;
+        el.grid.style.gridTemplateRows = `repeat(${state.n}, var(--cell-size))`;
+
+        for (let r = 0; r < state.n; r += 1) {
+          for (let c = 0; c < state.m; c += 1) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            cell.dataset.r = String(r);
+            cell.dataset.c = String(c);
+            cell.addEventListener("click", () => onCellClick(r, c));
+            el.grid.appendChild(cell);
+          }
+        }
+        resizeGrid();
+        renderGrid();
+      }
+
+      function applyGridSizeChanges() {
+        syncConfigFromInputs();
+
+        for (const obj of state.objects) {
+          if (obj.row !== null && (obj.row >= state.n || obj.col >= state.m)) {
+            obj.row = null;
+            obj.col = null;
+          }
+        }
+
+        if (state.source && (state.source.r >= state.n || state.source.c >= state.m)) {
+          state.source = null;
+        }
+
+        clearSimulation();
+        setupGrid();
+        renderObjectList();
+      }
+
+      function renderObjectList() {
+        el.objectList.innerHTML = "";
+        for (const obj of state.objects) {
+          const item = document.createElement("div");
+          item.className = "object-item";
+
+          const swatch = document.createElement("div");
+          swatch.className = "swatch";
+          swatch.style.background = obj.color;
+
+          const info = document.createElement("div");
+          const pos = obj.row === null ? "unplaced" : `(${obj.row}, ${obj.col})`;
+          info.textContent = `${obj.obj_id} | v=${obj.value}, bt=${obj.burn_time}, f=${obj.flammability} | ${pos}`;
+
+          const remove = document.createElement("button");
+          remove.textContent = "Remove";
+          remove.className = "danger";
+          remove.style.padding = "5px 7px";
+          remove.addEventListener("click", () => {
+            state.objects = state.objects.filter((o) => o.obj_id !== obj.obj_id);
+            clearSimulation();
+            renderObjectList();
+            renderGrid();
+          });
+
+          item.appendChild(swatch);
+          item.appendChild(info);
+          item.appendChild(remove);
+          el.objectList.appendChild(item);
+        }
+
+        renderLossTable();
+      }
+
+      function currentStepData() {
+        if (!state.steps.length) return null;
+        return state.steps[Math.min(state.currentStep, state.steps.length - 1)];
+      }
+
+      function destroyedSetAtCurrentStep() {
+        const destroyed = new Set();
+        if (!state.steps.length) return destroyed;
+
+        for (let i = 0; i <= state.currentStep; i += 1) {
+          const step = state.steps[i];
+          if (!step || !Array.isArray(step.newly_destroyed)) continue;
+          for (const objId of step.newly_destroyed) {
+            destroyed.add(String(objId));
+          }
+        }
+        return destroyed;
+      }
+
+      function renderGrid() {
+        const step = currentStepData();
+        const cells = el.grid.children;
+
+        const newlyIgnited = new Set();
+        const newlyDestroyedObjIds = new Set();
+        if (step) {
+          for (const rc of step.newly_ignited || []) {
+            newlyIgnited.add(`${rc[0]}:${rc[1]}`);
+          }
+          for (const id of step.newly_destroyed || []) {
+            newlyDestroyedObjIds.add(String(id));
+          }
+        }
+
+        for (let r = 0; r < state.n; r += 1) {
+          for (let c = 0; c < state.m; c += 1) {
+            const index = r * state.m + c;
+            const cell = cells[index];
+            if (!cell) continue;
+
+            cell.className = "cell";
+            if (state.mode !== "view") {
+              cell.classList.add("interactive");
+            }
+
+            let baseColor = "var(--default-cell)";
+            const obj = objectAtCell(r, c);
+
+            if (obj) {
+              baseColor = dimHex(obj.color, 0.42);
+            }
+
+            if (step && step.fire_grid && step.fire_grid[r] && step.fire_grid[r][c]) {
+              const s = step.fire_grid[r][c];
+              if (s.is_burnt_out) {
+                baseColor = "var(--burnt)";
+                cell.classList.add("burnt");
+              } else if (s.is_burning) {
+                baseColor = "var(--burning)";
+                cell.classList.add("burning");
+              }
+            }
+
+            cell.style.background = baseColor;
+
+            const key = `${r}:${c}`;
+            if (newlyIgnited.has(key)) {
+              cell.classList.add("flash-ignite");
+            }
+
+            if (obj && newlyDestroyedObjIds.has(obj.obj_id)) {
+              cell.classList.add("flash-destroy");
+            }
+
+            if (state.source && state.source.r === r && state.source.c === c) {
+              cell.classList.add("source");
+            }
+          }
+        }
+      }
+
+      function renderLossTable() {
+        const step = currentStepData();
+        const destroyed = destroyedSetAtCurrentStep();
+
+        el.lossTableBody.innerHTML = "";
+        for (const obj of state.objects) {
+          const tr = document.createElement("tr");
+
+          let status = "safe";
+          if (destroyed.has(obj.obj_id)) {
+            status = "destroyed";
+          } else if (step && obj.row !== null && step.fire_grid?.[obj.row]?.[obj.col]?.is_burning) {
+            status = "burning";
+          }
+
+          const expectedProb =
+            state.simMode === "uniform" && step && step.expected_loss_by_obj
+              ? Number(step.expected_loss_by_obj[obj.obj_id] ?? 0)
+              : null;
+
+          tr.innerHTML = `
+            <td>${obj.obj_id}</td>
+            <td class="right">${Number(obj.value).toFixed(2)}</td>
+            <td class="status-${status}">${status}</td>
+            <td class="right">${expectedProb === null ? "-" : expectedProb.toFixed(3)}</td>
+          `;
+
+          el.lossTableBody.appendChild(tr);
+        }
+      }
+
+      function updateStepUI() {
+        const hasSteps = state.steps.length > 0;
+        const step = currentStepData();
+
+        el.rewindBtn.disabled = !hasSteps;
+        el.backBtn.disabled = !hasSteps;
+        el.playPauseBtn.disabled = !hasSteps;
+        el.forwardBtn.disabled = !hasSteps;
+        el.endBtn.disabled = !hasSteps;
+        el.scrubber.disabled = !hasSteps;
+
+        if (!hasSteps) {
+          el.scrubber.min = 0;
+          el.scrubber.max = 0;
+          el.scrubber.value = 0;
+          el.timeDisplay.textContent = "0.0";
+          el.lossDisplay.textContent = "0.0";
+          el.stepInfo.textContent = "No simulation loaded";
+          el.playPauseBtn.textContent = "Play";
+          renderLossTable();
+          renderGrid();
+          return;
+        }
+
+        el.scrubber.min = 0;
+        el.scrubber.max = String(state.steps.length - 1);
+        el.scrubber.value = String(state.currentStep);
+        el.timeDisplay.textContent = Number(step.t ?? 0).toFixed(2);
+        el.lossDisplay.textContent = Number(step.cumulative_loss ?? 0).toFixed(3);
+
+        const prefix = state.simMode === "uniform" ? "Uniform" : "From source";
+        el.stepInfo.textContent = `${prefix}: step ${state.currentStep + 1}/${state.steps.length}`;
+
+        el.playPauseBtn.textContent = state.isPlaying ? "Pause" : "Play";
+
+        renderGrid();
+        renderLossTable();
+      }
+
+      function onCellClick(r, c) {
+        showError("");
+
+        if (state.mode === "view") {
+          return;
+        }
+
+        if (state.mode === "source") {
+          state.source = { r, c };
+          clearSimulation();
+          renderGrid();
+          return;
+        }
+
+        if (state.mode === "place") {
+          const existing = objectAtCell(r, c);
+          if (existing) {
+            existing.row = null;
+            existing.col = null;
+            clearSimulation();
+            renderObjectList();
+            renderGrid();
+            return;
+          }
+
+          const next = nextUnplacedObject();
+          if (!next) {
+            showError("All objects are already placed. Remove one from a cell to reassign.");
+            return;
+          }
+
+          next.row = r;
+          next.col = c;
+          clearSimulation();
+          renderObjectList();
+          renderGrid();
+        }
+      }
+
+      function placedObjectsPayload() {
+        return state.objects
+          .filter((obj) => obj.row !== null && obj.col !== null)
+          .map((obj) => ({
+            obj_id: obj.obj_id,
+            row: obj.row,
+            col: obj.col,
+            value: obj.value,
+            burn_time: obj.burn_time,
+          }));
+      }
+
+      function stopAtEndIfNeeded() {
+        if (state.currentStep >= state.steps.length - 1) {
+          pausePlayback();
+        }
+      }
+
+      function playStepForward() {
+        if (!state.steps.length) return;
+        if (state.currentStep < state.steps.length - 1) {
+          state.currentStep += 1;
+          updateStepUI();
+        }
+        stopAtEndIfNeeded();
+      }
+
+      function pausePlayback() {
+        if (state.playTimer) {
+          window.clearInterval(state.playTimer);
+          state.playTimer = null;
+        }
+        state.isPlaying = false;
+        updateStepUI();
+      }
+
+      function startPlayback() {
+        if (!state.steps.length || state.isPlaying) return;
+        state.isPlaying = true;
+        updateStepUI();
+        state.playTimer = window.setInterval(() => {
+          playStepForward();
+        }, 450);
+      }
+
+      function cellKey(r, c) {
+        return `${r}:${c}`;
+      }
+
+      function buildTimes(maxTime, dt) {
+        const times = [];
+        let t = 0;
+        while (t <= maxTime + 1e-12) {
+          times.push(Number(t.toFixed(10)));
+          t += dt;
+        }
+        return times;
+      }
+
+      function neighborCells(r, c, n, m) {
+        const out = [];
+        if (r > 0) out.push([r - 1, c]);
+        if (r < n - 1) out.push([r + 1, c]);
+        if (c > 0) out.push([r, c - 1]);
+        if (c < m - 1) out.push([r, c + 1]);
+        return out;
+      }
+
+      function cloneFireGrid(fireGrid) {
+        return fireGrid.map((row) => row.map((cell) => ({
+          is_burning: Boolean(cell.is_burning),
+          is_burnt_out: Boolean(cell.is_burnt_out),
+        })));
+      }
+
+      function parsePlacedObjects(objectsAtCells, n, m) {
+        return objectsAtCells.map((item, idx) => {
+          const obj = {
+            obj_id: String(item.obj_id ?? `obj_${idx + 1}`),
+            row: Number(item.row),
+            col: Number(item.col),
+            value: Number(item.value),
+            burn_time: Math.max(0, Number(item.burn_time)),
+          };
+          if (
+            !Number.isFinite(obj.row) ||
+            !Number.isFinite(obj.col) ||
+            obj.row < 0 ||
+            obj.col < 0 ||
+            obj.row >= n ||
+            obj.col >= m
+          ) {
+            throw new Error(`Object ${obj.obj_id} is out of bounds`);
+          }
+          return obj;
+        });
+      }
+
+      function simulateFromSourceLocal(config) {
+        const n = Number(config.n);
+        const m = Number(config.m);
+        const cellBurnDuration = Number(config.cell_burn_duration);
+        const maxTime = Number(config.max_time);
+        const dt = Number(config.dt);
+        const sourceR = Number(config.source_r);
+        const sourceC = Number(config.source_c);
+        const objects = parsePlacedObjects(config.objects_at_cells || [], n, m);
+
+        if (!(n > 0 && m > 0)) throw new Error("n and m must be positive");
+        if (!(dt > 0)) throw new Error("dt must be > 0");
+        if (!(cellBurnDuration > 0)) throw new Error("cell_burn_duration must be > 0");
+        if (!(maxTime >= 0)) throw new Error("max_time must be >= 0");
+        if (sourceR < 0 || sourceC < 0 || sourceR >= n || sourceC >= m) {
+          throw new Error("source cell is out of bounds");
+        }
+
+        const fireGrid = Array.from({ length: n }, () =>
+          Array.from({ length: m }, () => ({ is_burning: false, is_burnt_out: false }))
+        );
+
+        const igniteTime = new Map();
+        const objectExposure = new Map(objects.map((o) => [o.obj_id, 0]));
+        const destroyed = new Set();
+        let cumulativeLoss = 0;
+
+        function igniteCell(r, c, t) {
+          const cell = fireGrid[r][c];
+          if (cell.is_burning || cell.is_burnt_out) return false;
+          cell.is_burning = true;
+          igniteTime.set(cellKey(r, c), t);
+          return true;
+        }
+
+        const initialNewlyIgnited = [];
+        if (igniteCell(sourceR, sourceC, 0)) {
+          initialNewlyIgnited.push([sourceR, sourceC]);
+        }
+
+        const steps = [];
+        const times = buildTimes(maxTime, dt);
+        for (let stepIdx = 0; stepIdx < times.length; stepIdx += 1) {
+          const t = times[stepIdx];
+          let newlyIgnited = [];
+
+          if (stepIdx === 0) {
+            newlyIgnited = initialNewlyIgnited;
+          } else {
+            const burningBeforeTick = [];
+            for (let r = 0; r < n; r += 1) {
+              for (let c = 0; c < m; c += 1) {
+                if (fireGrid[r][c].is_burning) burningBeforeTick.push([r, c]);
+              }
+            }
+            for (const [r, c] of burningBeforeTick) {
+              for (const [nr, nc] of neighborCells(r, c, n, m)) {
+                if (igniteCell(nr, nc, t)) {
+                  newlyIgnited.push([nr, nc]);
+                }
+              }
+            }
+          }
+
+          for (const [key, startT] of igniteTime.entries()) {
+            const parts = key.split(":");
+            const r = Number(parts[0]);
+            const c = Number(parts[1]);
+            if (fireGrid[r][c].is_burning && (t - startT) >= cellBurnDuration) {
+              fireGrid[r][c].is_burning = false;
+              fireGrid[r][c].is_burnt_out = true;
+            }
+          }
+
+          const newlyDestroyed = [];
+          if (stepIdx === 0) {
+            for (const obj of objects) {
+              if (obj.burn_time <= 0 && fireGrid[obj.row][obj.col].is_burning && !destroyed.has(obj.obj_id)) {
+                destroyed.add(obj.obj_id);
+                newlyDestroyed.push(obj.obj_id);
+                cumulativeLoss += obj.value;
+              }
+            }
+          } else {
+            for (const obj of objects) {
+              if (destroyed.has(obj.obj_id)) continue;
+              if (fireGrid[obj.row][obj.col].is_burning) {
+                const nextExposure = Number(objectExposure.get(obj.obj_id) || 0) + dt;
+                objectExposure.set(obj.obj_id, nextExposure);
+                if (nextExposure + 1e-12 >= obj.burn_time) {
+                  destroyed.add(obj.obj_id);
+                  newlyDestroyed.push(obj.obj_id);
+                  cumulativeLoss += obj.value;
+                }
+              }
+            }
+          }
+
+          const fireFront = [];
+          for (let r = 0; r < n; r += 1) {
+            for (let c = 0; c < m; c += 1) {
+              if (fireGrid[r][c].is_burning) fireFront.push([r, c]);
+            }
+          }
+
+          steps.push({
+            t,
+            fire_front: fireFront,
+            newly_ignited: newlyIgnited,
+            newly_destroyed: newlyDestroyed,
+            cumulative_loss: Number(cumulativeLoss),
+            fire_grid: cloneFireGrid(fireGrid),
+          });
+        }
+
+        return steps;
+      }
+
+      function simulateUniformLocal(config) {
+        const n = Number(config.n);
+        const m = Number(config.m);
+        if (!(n > 0 && m > 0)) throw new Error("n and m must be positive");
+
+        const objects = parsePlacedObjects(config.objects_at_cells || [], n, m);
+        const valueByObj = new Map(objects.map((obj) => [obj.obj_id, obj.value]));
+        const allSources = [];
+        for (let r = 0; r < n; r += 1) {
+          for (let c = 0; c < m; c += 1) {
+            allSources.push([r, c]);
+          }
+        }
+        if (allSources.length === 0) return [];
+
+        const allRuns = allSources.map(([sourceR, sourceC]) =>
+          simulateFromSourceLocal({
+            ...config,
+            source_r: sourceR,
+            source_c: sourceC,
+          })
+        );
+
+        const stepCount = allRuns[0].length;
+        const numSources = allSources.length;
+
+        const burningCounts = Array.from({ length: stepCount }, () =>
+          Array.from({ length: n }, () => Array.from({ length: m }, () => 0))
+        );
+        const burntCounts = Array.from({ length: stepCount }, () =>
+          Array.from({ length: n }, () => Array.from({ length: m }, () => 0))
+        );
+        const destroyedCounts = Array.from(
+          { length: stepCount },
+          () => new Map(objects.map((obj) => [obj.obj_id, 0]))
+        );
+
+        for (const runSteps of allRuns) {
+          const destroyedSoFar = new Set();
+          for (let i = 0; i < runSteps.length; i += 1) {
+            const step = runSteps[i];
+            for (let r = 0; r < n; r += 1) {
+              for (let c = 0; c < m; c += 1) {
+                if (step.fire_grid[r][c].is_burning) burningCounts[i][r][c] += 1;
+                if (step.fire_grid[r][c].is_burnt_out) burntCounts[i][r][c] += 1;
+              }
+            }
+            for (const objId of step.newly_destroyed) {
+              destroyedSoFar.add(String(objId));
+            }
+            for (const objId of destroyedSoFar) {
+              destroyedCounts[i].set(objId, Number(destroyedCounts[i].get(objId) || 0) + 1);
+            }
+          }
+        }
+
+        const aggregatedSteps = [];
+        let prevThresholdBurning = Array.from({ length: n }, () => Array.from({ length: m }, () => false));
+        let prevProbs = new Map(objects.map((obj) => [obj.obj_id, 0]));
+
+        for (let i = 0; i < stepCount; i += 1) {
+          const expectedFireGrid = Array.from({ length: n }, (_, r) =>
+            Array.from({ length: m }, (_, c) => burningCounts[i][r][c] / numSources)
+          );
+          const expectedBurntGrid = Array.from({ length: n }, (_, r) =>
+            Array.from({ length: m }, (_, c) => burntCounts[i][r][c] / numSources)
+          );
+          const thresholdBurning = Array.from({ length: n }, (_, r) =>
+            Array.from({ length: m }, (_, c) => expectedFireGrid[r][c] >= 0.5)
+          );
+
+          const fireFront = [];
+          const newlyIgnited = [];
+          const fireGridSnapshot = [];
+
+          for (let r = 0; r < n; r += 1) {
+            const row = [];
+            for (let c = 0; c < m; c += 1) {
+              const isBurning = thresholdBurning[r][c];
+              const isBurntOut = !isBurning && expectedBurntGrid[r][c] >= 0.5;
+              row.push({ is_burning: isBurning, is_burnt_out: isBurntOut });
+              if (isBurning) fireFront.push([r, c]);
+              if (isBurning && !prevThresholdBurning[r][c]) newlyIgnited.push([r, c]);
+            }
+            fireGridSnapshot.push(row);
+          }
+
+          const expectedLossByObj = {};
+          for (const obj of objects) {
+            expectedLossByObj[obj.obj_id] = Number(destroyedCounts[i].get(obj.obj_id) || 0) / numSources;
+          }
+
+          const newlyDestroyed = [];
+          for (const obj of objects) {
+            const objId = obj.obj_id;
+            const prev = Number(prevProbs.get(objId) || 0);
+            if (expectedLossByObj[objId] - prev > 1e-12) newlyDestroyed.push(objId);
+          }
+
+          let cumulativeLoss = 0;
+          for (const [objId, prob] of Object.entries(expectedLossByObj)) {
+            cumulativeLoss += Number(valueByObj.get(objId) || 0) * Number(prob);
+          }
+
+          aggregatedSteps.push({
+            t: Number(allRuns[0][i].t),
+            fire_front: fireFront,
+            newly_ignited: newlyIgnited,
+            newly_destroyed: newlyDestroyed,
+            cumulative_loss: Number(cumulativeLoss),
+            fire_grid: fireGridSnapshot,
+            expected_fire_grid: expectedFireGrid,
+            expected_loss_by_obj: expectedLossByObj,
+          });
+
+          prevThresholdBurning = thresholdBurning;
+          prevProbs = new Map(Object.entries(expectedLossByObj));
+        }
+
+        return aggregatedSteps;
+      }
+
+      function solveGlobalExpectedLossLocal(config) {
+        const n = Number(config.n);
+        const m = Number(config.m);
+        if (!(n > 0 && m > 0)) throw new Error("n and m must be positive");
+
+        const parsed = (config.objects || []).map((obj, idx) => ({
+          obj_id: String(obj.obj_id ?? `obj_${idx + 1}`),
+          value: Number(obj.value),
+          burn_time: Math.max(0, Number(obj.burn_time ?? 1)),
+          flammability: Math.max(0, Number(obj.flammability ?? 1)),
+        }));
+
+        if (parsed.length > n * m) throw new Error("More objects than cells: cannot place all objects");
+
+        const allCells = [];
+        for (let r = 0; r < n; r += 1) {
+          for (let c = 0; c < m; c += 1) {
+            allCells.push([r, c]);
+          }
+        }
+
+        const cells = allCells.map(([r, c]) => {
+          let total = 0;
+          for (const [rr, cc] of allCells) {
+            total += Math.abs(r - rr) + Math.abs(c - cc);
+          }
+          return [r, c, total / allCells.length];
+        });
+        const minD = Math.min(...cells.map((x) => x[2]));
+        const maxD = Math.max(...cells.map((x) => x[2]));
+        for (const cell of cells) {
+          const avgD = cell[2];
+          const centrality = Math.abs(maxD - minD) < 1e-12 ? 0.5 : (1 - (avgD - minD) / (maxD - minD));
+          cell[2] = 0.2 + 0.8 * centrality;
+        }
+
+        const risks = cells.map((x) => x[2]);
+        const coeffByObj = new Map();
+        for (const obj of parsed) {
+          coeffByObj.set(obj.obj_id, obj.value * obj.flammability / (1 + obj.burn_time));
+        }
+
+        const sortedObjects = [...parsed].sort((a, b) => (coeffByObj.get(b.obj_id) - coeffByObj.get(a.obj_id)));
+        const cellIndices = Array.from({ length: cells.length }, (_, i) => i);
+        let bestLoss = Number.POSITIVE_INFINITY;
+        let bestAssignment = null;
+
+        function optimisticLowerBound(startIdx, remainingCellIds) {
+          const remainingCoeffs = sortedObjects
+            .slice(startIdx)
+            .map((obj) => coeffByObj.get(obj.obj_id))
+            .sort((a, b) => b - a);
+          const remainingRisks = remainingCellIds.map((i) => risks[i]).sort((a, b) => a - b);
+          const k = Math.min(remainingCoeffs.length, remainingRisks.length);
+          let sum = 0;
+          for (let i = 0; i < k; i += 1) sum += remainingCoeffs[i] * remainingRisks[i];
+          return sum;
+        }
+
+        function dfs(objIdx, remainingCellIds, currentLoss, assignment) {
+          if (objIdx >= sortedObjects.length) {
+            if (currentLoss < bestLoss) {
+              bestLoss = currentLoss;
+              bestAssignment = new Map(assignment);
+            }
+            return;
+          }
+
+          const lb = currentLoss + optimisticLowerBound(objIdx, remainingCellIds);
+          if (lb >= bestLoss) return;
+
+          const obj = sortedObjects[objIdx];
+          const coeff = coeffByObj.get(obj.obj_id);
+          const candidateCells = [...remainingCellIds].sort((a, b) => risks[a] - risks[b]);
+          for (const cellIdx of candidateCells) {
+            assignment.set(obj.obj_id, cellIdx);
+            const nextCells = remainingCellIds.filter((id) => id !== cellIdx);
+            dfs(objIdx + 1, nextCells, currentLoss + coeff * risks[cellIdx], assignment);
+            assignment.delete(obj.obj_id);
+          }
+        }
+
+        if (sortedObjects.length > 11) {
+          const greedyCells = [...cellIndices].sort((a, b) => risks[a] - risks[b]);
+          let loss = 0;
+          const assignment = new Map();
+          for (let i = 0; i < sortedObjects.length; i += 1) {
+            const obj = sortedObjects[i];
+            const cellIdx = greedyCells[i];
+            assignment.set(obj.obj_id, cellIdx);
+            loss += coeffByObj.get(obj.obj_id) * risks[cellIdx];
+          }
+          bestLoss = loss;
+          bestAssignment = assignment;
+        } else {
+          dfs(0, cellIndices, 0, new Map());
+        }
+
+        if (!bestAssignment) return { best_loss: 0, assignment: [] };
+
+        const assignmentOut = parsed.map((obj) => {
+          const cellIdx = bestAssignment.get(obj.obj_id);
+          const [row, col, risk] = cells[cellIdx];
+          return {
+            obj_id: obj.obj_id,
+            row,
+            col,
+            expected_contribution: Number(coeffByObj.get(obj.obj_id) * risk),
+          };
+        });
+
+        return {
+          best_loss: Number(bestLoss),
+          assignment: assignmentOut,
+        };
+      }
+
+      function runSolve() {
+        showError("");
+        syncConfigFromInputs();
+
+        if (state.objects.length === 0) {
+          showError("Add at least one object before solving.");
+          return;
+        }
+
+        try {
+          const payload = {
+            n: state.n,
+            m: state.m,
+            objects: state.objects.map((obj) => ({
+              obj_id: obj.obj_id,
+              value: obj.value,
+              burn_time: obj.burn_time,
+              flammability: obj.flammability,
+            })),
+          };
+
+          const data = solveGlobalExpectedLossLocal(payload);
+          const byId = new Map(state.objects.map((obj) => [obj.obj_id, obj]));
+
+          for (const item of data.assignment || []) {
+            const obj = byId.get(String(item.obj_id));
+            if (!obj) continue;
+            obj.row = Number(item.row);
+            obj.col = Number(item.col);
+            obj.expected_contribution = Number(item.expected_contribution ?? 0);
+          }
+
+          state.bestLoss = Number(data.best_loss ?? 0);
+          el.bestLoss.textContent = Number(state.bestLoss).toFixed(4);
+
+          clearSimulation();
+          renderObjectList();
+          renderGrid();
+        } catch (error) {
+          showError(String(error.message || error));
+        }
+      }
+
+      function runClearPlacement() {
+        for (const obj of state.objects) {
+          obj.row = null;
+          obj.col = null;
+        }
+        state.source = null;
+        state.bestLoss = null;
+        el.bestLoss.textContent = "-";
+        clearSimulation();
+        renderObjectList();
+        renderGrid();
+      }
+
+      function runSimulation(mode) {
+        showError("");
+        syncConfigFromInputs();
+
+        const placed = placedObjectsPayload();
+        if (placed.length === 0) {
+          showError("Place at least one object on the grid before simulation.");
+          return;
+        }
+
+        if (mode === "source" && !state.source) {
+          showError("Set a fire source cell first.");
+          return;
+        }
+
+        try {
+          const body = {
+            n: state.n,
+            m: state.m,
+            cell_burn_duration: state.cell_burn_duration,
+            max_time: state.max_time,
+            dt: state.dt,
+            objects_at_cells: placed,
+          };
+
+          let steps = [];
+          if (mode === "source") {
+            body.source_r = state.source.r;
+            body.source_c = state.source.c;
+            steps = simulateFromSourceLocal(body);
+          } else {
+            steps = simulateUniformLocal(body);
+          }
+
+          state.steps = Array.isArray(steps) ? steps : [];
+          state.currentStep = 0;
+          state.simMode = mode;
+
+          state.mode = "view";
+          for (const radio of el.modeInputs) {
+            radio.checked = radio.value === "view";
+          }
+
+          updateStepUI();
+        } catch (error) {
+          showError(String(error.message || error));
+        }
+      }
+
+      function addObject() {
+        showError("");
+        const value = Number.parseFloat(el.objValueInput.value);
+        const burn_time = Number.parseFloat(el.objBurnTimeInput.value);
+        const flammability = Number.parseFloat(el.objFlammabilityInput.value);
+
+        if (!Number.isFinite(value) || value < 0) {
+          showError("Object value must be a non-negative number.");
+          return;
+        }
+        if (!Number.isFinite(burn_time) || burn_time < 0) {
+          showError("Object burn_time must be a non-negative number.");
+          return;
+        }
+        if (!Number.isFinite(flammability) || flammability < 0) {
+          showError("Object flammability must be a non-negative number.");
+          return;
+        }
+
+        const idx = state.objectCounter;
+        state.objectCounter += 1;
+
+        state.objects.push({
+          obj_id: `obj_${idx}`,
+          value,
+          burn_time,
+          flammability,
+          color: palette[(idx - 1) % palette.length],
+          row: null,
+          col: null,
+        });
+
+        renderObjectList();
+        renderGrid();
+      }
+
+      function bindEvents() {
+        el.addObjectBtn.addEventListener("click", addObject);
+        el.solveBtn.addEventListener("click", runSolve);
+        el.clearBtn.addEventListener("click", runClearPlacement);
+        el.simulateSourceBtn.addEventListener("click", () => runSimulation("source"));
+        el.simulateUniformBtn.addEventListener("click", () => runSimulation("uniform"));
+
+        for (const input of [el.nInput, el.mInput, el.cellBurnDurationInput, el.maxTimeInput, el.dtInput]) {
+          input.addEventListener("change", applyGridSizeChanges);
+        }
+
+        for (const modeInput of el.modeInputs) {
+          modeInput.addEventListener("change", () => {
+            if (modeInput.checked) {
+              state.mode = modeInput.value;
+              renderGrid();
+            }
+          });
+        }
+
+        el.rewindBtn.addEventListener("click", () => {
+          pausePlayback();
+          state.currentStep = 0;
+          updateStepUI();
+        });
+
+        el.backBtn.addEventListener("click", () => {
+          pausePlayback();
+          if (state.currentStep > 0) {
+            state.currentStep -= 1;
+            updateStepUI();
+          }
+        });
+
+        el.playPauseBtn.addEventListener("click", () => {
+          if (!state.steps.length) return;
+          if (state.isPlaying) {
+            pausePlayback();
+          } else {
+            startPlayback();
+          }
+        });
+
+        el.forwardBtn.addEventListener("click", () => {
+          pausePlayback();
+          if (state.currentStep < state.steps.length - 1) {
+            state.currentStep += 1;
+            updateStepUI();
+          }
+        });
+
+        el.endBtn.addEventListener("click", () => {
+          pausePlayback();
+          if (state.steps.length) {
+            state.currentStep = state.steps.length - 1;
+            updateStepUI();
+          }
+        });
+
+        el.scrubber.addEventListener("input", () => {
+          pausePlayback();
+          state.currentStep = Number.parseInt(el.scrubber.value, 10) || 0;
+          updateStepUI();
+        });
+
+        window.addEventListener("resize", resizeGrid);
+      }
+
+      function init() {
+        syncConfigFromInputs();
+        bindEvents();
+        setupGrid();
+        renderObjectList();
+        updateStepUI();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
