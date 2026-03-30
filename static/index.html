@@ -288,6 +288,14 @@
       gap: 7px;
     }
 
+    .collapse-btn {
+      margin-left: auto;
+      min-width: 28px;
+      padding: 4px 8px;
+      font-weight: 600;
+      line-height: 1;
+    }
+
     .scrubber {
       width: 100%;
     }
@@ -503,131 +511,144 @@
           <button id="playPauseBtn" class="ghost">Play</button>
           <button id="forwardBtn" class="ghost">&gt;</button>
           <button id="endBtn" class="ghost">&gt;|</button>
-        </div>
-        <input id="scrubber" class="scrubber" type="range" min="0" max="0" value="0" step="1" />
-        <div class="stats">
-          <div>t = <span id="timeDisplay">0.0</span></div>
-          <div>Cumulative loss: <strong id="lossDisplay">0.0</strong></div>
+          <button
+            id="toggleDetailsBtn"
+            class="ghost collapse-btn"
+            type="button"
+            title="Hide details below playback controls"
+            aria-label="Hide details below playback controls"
+            aria-expanded="true"
+          >▾</button>
         </div>
       </section>
 
-      <section>
-        <table>
-          <thead>
-            <tr>
-              <th>obj_id</th>
-              <th class="right">value</th>
-              <th>Status</th>
-              <th class="right">expected_loss_by_obj</th>
-            </tr>
-          </thead>
-          <tbody id="lossTableBody"></tbody>
-        </table>
-      </section>
+      <div id="belowPlaybackPanel">
+        <section class="controls">
+          <input id="scrubber" class="scrubber" type="range" min="0" max="0" value="0" step="1" />
+          <div class="stats">
+            <div>t = <span id="timeDisplay">0.0</span></div>
+            <div>Cumulative loss: <strong id="lossDisplay">0.0</strong></div>
+          </div>
+        </section>
 
-      <section class="controls">
-        <div class="tab-bar">
-          <button id="optimizerResultsTabBtn" class="tab-btn active" type="button">Results</button>
-          <button id="optimizerTraceTabBtn" class="tab-btn" type="button">B&amp;B Step-Through</button>
-        </div>
-
-        <div id="optimizerResultsPanel">
-          <div class="small">Latest optimizer assignment summary</div>
-          <table style="margin-top:6px;">
+        <section>
+          <table>
             <thead>
               <tr>
                 <th>obj_id</th>
-                <th class="right">row</th>
-                <th class="right">col</th>
-                <th class="right">reachable</th>
-                <th class="right">expected_contribution</th>
+                <th class="right">value</th>
+                <th>Status</th>
+                <th class="right">expected_loss_by_obj</th>
               </tr>
             </thead>
-            <tbody id="optimizerResultsBody">
-              <tr><td colspan="5">Run optimizer to populate results.</td></tr>
-            </tbody>
+            <tbody id="lossTableBody"></tbody>
           </table>
-        </div>
+        </section>
 
-        <div id="optimizerTracePanel" hidden>
-          <div id="tracePlaceholder" class="small">Run optimizer to view branch-and-bound trace.</div>
+        <section class="controls">
+          <div class="tab-bar">
+            <button id="optimizerResultsTabBtn" class="tab-btn active" type="button">Results</button>
+            <button id="optimizerTraceTabBtn" class="tab-btn" type="button">B&amp;B Step-Through</button>
+          </div>
 
-          <div id="traceContent" hidden>
-            <div class="trace-section-title">Precomputation Table</div>
-            <div class="trace-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>obj_id</th>
-                    <th class="right">value</th>
-                    <th class="right">burn_time</th>
-                    <th class="right">deadline</th>
-                    <th class="right">coeff</th>
-                    <th class="right">sort_position</th>
-                  </tr>
-                </thead>
-                <tbody id="precomputeBody"></tbody>
-              </table>
-            </div>
+          <div id="optimizerResultsPanel">
+            <div class="small">Latest optimizer assignment summary</div>
+            <table style="margin-top:6px;">
+              <thead>
+                <tr>
+                  <th>obj_id</th>
+                  <th class="right">row</th>
+                  <th class="right">col</th>
+                  <th class="right">reachable</th>
+                  <th class="right">expected_contribution</th>
+                </tr>
+              </thead>
+              <tbody id="optimizerResultsBody">
+                <tr><td colspan="5">Run optimizer to populate results.</td></tr>
+              </tbody>
+            </table>
+          </div>
 
-            <div class="trace-section-title">DFS Call Log</div>
-            <div class="trace-pager">
-              <button id="tracePrevBtn" class="ghost" type="button">&lt; Prev</button>
-              <button id="traceNextBtn" class="ghost" type="button">Next &gt;</button>
-              <span id="tracePageInfo">Page 1/1</span>
-            </div>
-            <div class="trace-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th class="right">depth</th>
-                    <th>obj_id</th>
-                    <th>cell</th>
-                    <th class="right">reachable</th>
-                    <th class="right">contribution</th>
-                    <th class="right">current_loss</th>
-                    <th class="right">lower_bound</th>
-                    <th class="right">best_loss</th>
-                    <th>action</th>
-                  </tr>
-                </thead>
-                <tbody id="dfsLogBody"></tbody>
-              </table>
-            </div>
+          <div id="optimizerTracePanel" hidden>
+            <div id="tracePlaceholder" class="small">Run optimizer to view branch-and-bound trace.</div>
 
-            <div class="trace-section-title">Best-Found History</div>
-            <div class="trace-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th class="right">loss</th>
-                    <th>assignment</th>
-                  </tr>
-                </thead>
-                <tbody id="bestHistoryBody"></tbody>
-              </table>
-            </div>
+            <div id="traceContent" hidden>
+              <div class="trace-section-title">Precomputation Table</div>
+              <div class="trace-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>obj_id</th>
+                      <th class="right">value</th>
+                      <th class="right">burn_time</th>
+                      <th class="right">deadline</th>
+                      <th class="right">coeff</th>
+                      <th class="right">sort_position</th>
+                    </tr>
+                  </thead>
+                  <tbody id="precomputeBody"></tbody>
+                </table>
+              </div>
 
-            <div class="trace-section-title">Final Assignment Summary</div>
-            <div class="trace-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>obj_id</th>
-                    <th class="right">row</th>
-                    <th class="right">col</th>
-                    <th class="right">reachable</th>
-                    <th class="right">expected_contribution</th>
-                  </tr>
-                </thead>
-                <tbody id="finalSummaryBody"></tbody>
-              </table>
+              <div class="trace-section-title">DFS Call Log</div>
+              <div class="trace-pager">
+                <button id="tracePrevBtn" class="ghost" type="button">&lt; Prev</button>
+                <button id="traceNextBtn" class="ghost" type="button">Next &gt;</button>
+                <span id="tracePageInfo">Page 1/1</span>
+              </div>
+              <div class="trace-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th class="right">depth</th>
+                      <th>obj_id</th>
+                      <th>cell</th>
+                      <th class="right">reachable</th>
+                      <th class="right">contribution</th>
+                      <th class="right">current_loss</th>
+                      <th class="right">lower_bound</th>
+                      <th class="right">best_loss</th>
+                      <th>action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dfsLogBody"></tbody>
+                </table>
+              </div>
+
+              <div class="trace-section-title">Best-Found History</div>
+              <div class="trace-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th class="right">loss</th>
+                      <th>assignment</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bestHistoryBody"></tbody>
+                </table>
+              </div>
+
+              <div class="trace-section-title">Final Assignment Summary</div>
+              <div class="trace-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>obj_id</th>
+                      <th class="right">row</th>
+                      <th class="right">col</th>
+                      <th class="right">reachable</th>
+                      <th class="right">expected_contribution</th>
+                    </tr>
+                  </thead>
+                  <tbody id="finalSummaryBody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   </div>
 
@@ -656,6 +677,7 @@
         optimizerTab: "results",
         tracePage: 0,
         tracePageSize: 200,
+        detailsCollapsed: false,
       };
 
       const el = {
@@ -684,6 +706,8 @@
         playPauseBtn: document.getElementById("playPauseBtn"),
         forwardBtn: document.getElementById("forwardBtn"),
         endBtn: document.getElementById("endBtn"),
+        toggleDetailsBtn: document.getElementById("toggleDetailsBtn"),
+        belowPlaybackPanel: document.getElementById("belowPlaybackPanel"),
         scrubber: document.getElementById("scrubber"),
         timeDisplay: document.getElementById("timeDisplay"),
         lossDisplay: document.getElementById("lossDisplay"),
@@ -745,6 +769,24 @@
         el.solveBtn.disabled = isLoading;
         if (el.solveLoading) {
           el.solveLoading.hidden = !isLoading;
+        }
+      }
+
+      function setDetailsCollapsed(collapsed) {
+        state.detailsCollapsed = Boolean(collapsed);
+        if (!el.belowPlaybackPanel || !el.toggleDetailsBtn) return;
+
+        el.belowPlaybackPanel.hidden = state.detailsCollapsed;
+        if (state.detailsCollapsed) {
+          el.toggleDetailsBtn.textContent = "▸";
+          el.toggleDetailsBtn.title = "Show details below playback controls";
+          el.toggleDetailsBtn.setAttribute("aria-label", "Show details below playback controls");
+          el.toggleDetailsBtn.setAttribute("aria-expanded", "false");
+        } else {
+          el.toggleDetailsBtn.textContent = "▾";
+          el.toggleDetailsBtn.title = "Hide details below playback controls";
+          el.toggleDetailsBtn.setAttribute("aria-label", "Hide details below playback controls");
+          el.toggleDetailsBtn.setAttribute("aria-expanded", "true");
         }
       }
 
@@ -1891,6 +1933,9 @@
           state.tracePage += 1;
           renderTracePanel();
         });
+        el.toggleDetailsBtn.addEventListener("click", () => {
+          setDetailsCollapsed(!state.detailsCollapsed);
+        });
 
         for (const input of [el.nInput, el.mInput, el.cellBurnDurationInput, el.tMaxInput, el.dtInput]) {
           input.addEventListener("change", applyGridSizeChanges);
@@ -1959,6 +2004,7 @@
         setupGrid();
         renderObjectList();
         renderOptimizerPanels();
+        setDetailsCollapsed(false);
         updateStepUI();
       }
 
